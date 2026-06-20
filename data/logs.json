@@ -1,0 +1,1 @@
+[{"id":1,"taskId":1,"level":"INFO","message":"开始备份任务，设备: 192.168.1.1","createTime":"2026-06-20 10:46:56"},{"id":2,"taskId":1,"level":"SUCCESS","message":"备份成功","createTime":"2026-06-20 10:46:57"}]

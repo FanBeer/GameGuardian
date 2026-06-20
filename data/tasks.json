@@ -1,0 +1,1 @@
+[{"id":1,"deviceId":1,"deviceIp":"192.168.1.1","deviceBrand":"华为","status":"成功","startTime":"2026-06-20 10:46:56","output":"> display version\n# [测试连接] 命令在实际环境中会通过 SSH 执行并返回设备输出\n> display current-configuration\n# [备份配置] 命令在实际环境中会通过 SSH 执行并返回设备输出\n> save\n# [保存配置] 命令在实际环境中会通过 SSH 执行并返回设备输出\n\n== 备份执行完成 ==\n","errorInfo":null,"endTime":"2026-06-20 10:46:57"}]
