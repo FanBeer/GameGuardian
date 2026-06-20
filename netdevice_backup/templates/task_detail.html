@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+
+{% block title %}任务详情 - 网络设备配置备份{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+    <a href="/history" class="btn btn-outline-secondary">&larr; 返回历史</a>
+</div>
+
+<h4 class="mb-4">任务详情 #{{ task.id }}</h4>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card mb-3">
+            <div class="card-header">基本信息</div>
+            <div class="card-body">
+                <table class="table table-sm">
+                    <tr>
+                        <th width="120">设备名称:</th>
+                        <td>{{ task.device_name }}</td>
+                    </tr>
+                    <tr>
+                        <th>IP地址:</th>
+                        <td>{{ task.device_ip }}</td>
+                    </tr>
+                    <tr>
+                        <th>品牌:</th>
+                        <td>{{ task.brand }}</td>
+                    </tr>
+                    <tr>
+                        <th>状态:</th>
+                        <td>
+                            {% if task.status == 'completed' %}
+                            <span class="badge bg-success">已完成</span>
+                            {% elif task.status == 'failed' %}
+                            <span class="badge bg-danger">失败</span>
+                            {% elif task.status == 'running' %}
+                            <span class="badge bg-info">执行中</span>
+                            {% else %}
+                            <span class="badge bg-secondary">待执行</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>开始时间:</th>
+                        <td>{{ task.start_time or '-' }}</td>
+                    </tr>
+                    <tr>
+                        <th>结束时间:</th>
+                        <td>{{ task.end_time or '-' }}</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        {% if task.error %}
+        <div class="card mb-3">
+            <div class="card-header bg-danger text-white">错误信息</div>
+            <div class="card-body">
+                <pre class="text-danger mb-0">{{ task.error }}</pre>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+{% if task.result %}
+<div class="card">
+    <div class="card-header">命令回显结果</div>
+    <div class="card-body">
+        <pre>{{ task.result }}</pre>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,79 @@
+{% extends "base.html" %}
+
+{% block title %}备份历史 - 网络设备配置备份{% endblock %}
+
+{% block content %}
+<h4 class="mb-4">备份历史</h4>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>设备名称</th>
+                        <th>IP地址</th>
+                        <th>品牌</th>
+                        <th>状态</th>
+                        <th>开始时间</th>
+                        <th>结束时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="taskTable">
+                    <tr><td colspan="8" class="text-center">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    loadTasks();
+});
+
+function loadTasks() {
+    fetch('/api/tasks')
+        .then(r => r.json())
+        .then(tasks => {
+            renderTasks(tasks);
+        });
+}
+
+function renderTasks(tasks) {
+    const tbody = document.getElementById('taskTable');
+    if (tasks.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无备份记录</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = tasks.map(t => {
+        const statusBadge = {
+            'pending': '<span class="badge bg-secondary">待执行</span>',
+            'running': '<span class="badge bg-info">执行中</span>',
+            'completed': '<span class="badge bg-success">已完成</span>',
+            'failed': '<span class="badge bg-danger">失败</span>'
+        }[t.status] || t.status;
+
+        return `
+            <tr>
+                <td>${t.id}</td>
+                <td>${t.device_name}</td>
+                <td>${t.device_ip}</td>
+                <td>${t.brand}</td>
+                <td>${statusBadge}</td>
+                <td>${t.start_time || '-'}</td>
+                <td>${t.end_time || '-'}</td>
+                <td>
+                    <a href="/task/${t.id}" class="btn btn-sm btn-outline-primary">查看详情</a>
+                </td>
+            </tr>
+        `;
+    }).join('');
+}
+</script>
+{% endblock %}

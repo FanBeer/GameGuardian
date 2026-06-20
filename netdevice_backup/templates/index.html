@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+
+{% block title %}设备管理 - 网络设备配置备份{% endblock %}
+
+{% block content %}
+<div class="row mb-3">
+    <div class="col-md-6">
+        <h4>设备列表</h4>
+    </div>
+    <div class="col-md-6 text-end">
+        <button class="btn btn-primary" onclick="showAddModal()">添加设备</button>
+        <button class="btn btn-success" onclick="backupSelected()">执行备份</button>
+    </div>
+</div>
+
+<div class="row mb-3">
+    <div class="col-md-3">
+        <select class="form-select" id="brandFilter" onchange="loadDevices()">
+            <option value="">全部品牌</option>
+            {% for brand in brands %}
+            <option value="{{ brand.brand }}">{{ brand.brand }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <div class="table-responsive">
+            <table class="table table-hover">
+                <thead>
+                    <tr>
+                        <th width="40"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+                        <th>设备名称</th>
+                        <th>IP地址</th>
+                        <th>端口</th>
+                        <th>协议</th>
+                        <th>品牌</th>
+                        <th>型号</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="deviceTable">
+                    <tr><td colspan="8" class="text-center">加载中...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<!-- 添加/编辑设备模态框 -->
+<div class="modal fade" id="deviceModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalTitle">添加设备</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="deviceForm">
+                    <input type="hidden" id="deviceId">
+                    <div class="mb-3">
+                        <label class="form-label">设备名称</label>
+                        <input type="text" class="form-control" id="deviceName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">IP地址</label>
+                        <input type="text" class="form-control" id="deviceIp" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label">端口</label>
+                            <input type="number" class="form-control" id="devicePort" value="22">
+                        </div>
+                        <div class="col">
+                            <label class="form-label">协议</label>
+                            <select class="form-select" id="deviceProtocol">
+                                <option value="SSH">SSH</option>
+                                <option value="Telnet">Telnet</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">用户名</label>
+                        <input type="text" class="form-control" id="deviceUsername" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">密码</label>
+                        <input type="password" class="form-control" id="devicePassword" required>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col">
+                            <label class="form-label">品牌</label>
+                            <select class="form-select" id="deviceBrand" required>
+                                <option value="">选择品牌</option>
+                                {% for brand in brands %}
+                                <option value="{{ brand.brand }}">{{ brand.brand }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col">
+                            <label class="form-label">型号</label>
+                            <input type="text" class="form-control" id="deviceModel">
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveDevice()">保存</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 备份进度模态框 -->
+<div class="modal fade" id="backupModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">备份执行中...</h5>
+            </div>
+            <div class="modal-body">
+                <div id="taskProgress"></div>
+                <div class="mt-3" id="taskOutput" style="display:none;">
+                    <h6>命令回显:</h6>
+                    <pre id="commandOutput"></pre>
+                </div>
+                <div class="mt-3" id="taskError" style="display:none;">
+                    <h6>错误信息:</h6>
+                    <pre id="errorOutput" class="text-danger"></pre>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let deviceModal, backupModal;
+let currentTaskIds = [];
+let pollInterval = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    deviceModal = new bootstrap.Modal(document.getElementById('deviceModal'));
+    backupModal = new bootstrap.Modal(document.getElementById('backupModal'));
+    loadDevices();
+});
+
+function loadDevices() {
+    const brand = document.getElementById('brandFilter').value;
+    fetch('/api/devices')
+        .then(r => r.json())
+        .then(devices => {
+            const filtered = brand ? devices.filter(d => d.brand === brand) : devices;
+            renderDevices(filtered);
+        });
+}
+
+function renderDevices(devices) {
+    const tbody = document.getElementById('deviceTable');
+    if (devices.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" class="text-center text-muted">暂无设备</td></tr>';
+        return;
+    }
+    tbody.innerHTML = devices.map(d => `
+        <tr>
+            <td><input type="checkbox" class="device-checkbox" value="${d.id}"></td>
+            <td>${d.name}</td>
+            <td>${d.ip}</td>
+            <td>${d.port}</td>
+            <td><span class="badge bg-info">${d.protocol}</span></td>
+            <td>${d.brand}</td>
+            <td>${d.model || '-'}</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary me-1" onclick="editDevice(${d.id})">编辑</button>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteDevice(${d.id})">删除</button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function toggleSelectAll() {
+    const checked = document.getElementById('selectAll').checked;
+    document.querySelectorAll('.device-checkbox').forEach(cb => cb.checked = checked);
+}
+
+function showAddModal() {
+    document.getElementById('modalTitle').textContent = '添加设备';
+    document.getElementById('deviceForm').reset();
+    document.getElementById('deviceId').value = '';
+    document.getElementById('devicePort').value = '22';
+    deviceModal.show();
+}
+
+function editDevice(id) {
+    fetch('/api/devices')
+        .then(r => r.json())
+        .then(devices => {
+            const d = devices.find(device => device.id === id);
+            if (d) {
+                document.getElementById('modalTitle').textContent = '编辑设备';
+                document.getElementById('deviceId').value = d.id;
+                document.getElementById('deviceName').value = d.name;
+                document.getElementById('deviceIp').value = d.ip;
+                document.getElementById('devicePort').value = d.port;
+                document.getElementById('deviceProtocol').value = d.protocol;
+                document.getElementById('deviceUsername').value = d.username;
+                document.getElementById('devicePassword').value = '******';
+                document.getElementById('deviceBrand').value = d.brand;
+                document.getElementById('deviceModel').value = d.model || '';
+                deviceModal.show();
+            }
+        });
+}
+
+function saveDevice() {
+    const id = document.getElementById('deviceId').value;
+    const data = {
+        name: document.getElementById('deviceName').value,
+        ip: document.getElementById('deviceIp').value,
+        port: parseInt(document.getElementById('devicePort').value),
+        protocol: document.getElementById('deviceProtocol').value,
+        username: document.getElementById('deviceUsername').value,
+        password: document.getElementById('devicePassword').value,
+        brand: document.getElementById('deviceBrand').value,
+        model: document.getElementById('deviceModel').value
+    };
+
+    if (!data.name || !data.ip || !data.username || !data.password || !data.brand) {
+        alert('请填写必填项');
+        return;
+    }
+
+    const url = id ? `/api/devices/${id}` : '/api/devices';
+    const method = id ? 'PUT' : 'POST';
+
+    fetch(url, {
+        method: method,
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify(data)
+    })
+    .then(r => r.json())
+    .then(() => {
+        deviceModal.hide();
+        loadDevices();
+    })
+    .catch(err => alert('保存失败: ' + err));
+}
+
+function deleteDevice(id) {
+    if (!confirm('确定要删除这个设备吗？')) return;
+    fetch(`/api/devices/${id}`, {method: 'DELETE'})
+        .then(r => r.json())
+        .then(() => loadDevices());
+}
+
+function backupSelected() {
+    const checked = document.querySelectorAll('.device-checkbox:checked');
+    if (checked.length === 0) {
+        alert('请选择至少一个设备');
+        return;
+    }
+    const deviceIds = Array.from(checked).map(cb => parseInt(cb.value));
+
+    fetch('/api/backup', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({device_ids: deviceIds})
+    })
+    .then(r => r.json())
+    .then(data => {
+        currentTaskIds = data.task_ids;
+        showBackupProgress();
+    });
+}
+
+function showBackupProgress() {
+    document.querySelector('#backupModal .modal-title').textContent = '备份执行中...';
+    document.getElementById('taskOutput').style.display = 'none';
+    document.getElementById('taskError').style.display = 'none';
+    backupModal.show();
+    pollTaskStatus();
+}
+
+function pollTaskStatus() {
+    if (pollInterval) clearInterval(pollInterval);
+
+    pollInterval = setInterval(() => {
+        Promise.all(currentTaskIds.map(id => fetch(`/api/tasks/${id}`).then(r => r.json())))
+            .then(tasks => {
+                let html = '<ul class="list-group">';
+                let allCompleted = true;
+
+                tasks.forEach(task => {
+                    const statusClass = {
+                        'pending': 'status-pending',
+                        'running': 'status-running',
+                        'completed': 'status-completed',
+                        'failed': 'status-failed'
+                    }[task.status] || '';
+
+                    html += `<li class="list-group-item d-flex justify-content-between align-items-center">
+                        <span>${task.device_name} (${task.device_ip})</span>
+                        <span class="badge bg-${task.status === 'completed' ? 'success' : task.status === 'failed' ? 'danger' : task.status === 'running' ? 'info' : 'secondary'} ${statusClass}">${task.status}</span>
+                    </li>`;
+
+                    if (task.status === 'running') allCompleted = false;
+                    if (task.status === 'pending') allCompleted = false;
+
+                    // 显示结果或错误
+                    if (task.status === 'completed' && task.result) {
+                        document.getElementById('taskOutput').style.display = 'block';
+                        document.getElementById('commandOutput').textContent = task.result;
+                    }
+                    if (task.status === 'failed' && task.error) {
+                        document.getElementById('taskError').style.display = 'block';
+                        document.getElementById('errorOutput').textContent = task.error;
+                    }
+                });
+
+                html += '</ul>';
+                document.getElementById('taskProgress').innerHTML = html;
+
+                if (allCompleted) {
+                    clearInterval(pollInterval);
+                    document.querySelector('#backupModal .modal-title').textContent = '备份完成';
+                }
+            });
+    }, 2000);
+}
+</script>
+{% endblock %}
