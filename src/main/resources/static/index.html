@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网络设备配置备份系统</title>
+    <!-- Element Plus CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/element-plus@2.4.4/dist/index.css">
+    <!-- Element Plus Icons -->
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { height: 100%; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f7fa; }
+        #app { height: 100%; }
+
+        .layout { height: 100vh; display: flex; flex-direction: column; }
+
+        .header {
+            background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
+            color: #fff;
+            padding: 0 30px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 60px;
+            flex-shrink: 0;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        }
+        .header-title { display: flex; align-items: center; font-size: 20px; font-weight: 600; }
+        .header-title .el-icon { margin-right: 12px; font-size: 26px; }
+        .header-info { display: flex; align-items: center; font-size: 13px; color: #bdc3c7; }
+        .header-info .el-icon { margin-left: 20px; }
+
+        .main-container { flex: 1; display: flex; overflow: hidden; }
+
+        .sidebar {
+            width: 220px;
+            background: #fff;
+            border-right: 1px solid #e6e8eb;
+            flex-shrink: 0;
+        }
+        .sidebar-menu { border-right: none; }
+        .el-menu-item { height: 56px !important; line-height: 56px !important; font-size: 14px; }
+        .el-menu-item .el-icon { font-size: 18px; margin-right: 10px; }
+
+        .content {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .page-card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.04); }
+        .page-title { font-size: 18px; font-weight: 600; color: #2c3e50; margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #f0f2f5; }
+
+        .stat-card { background: #fff; border-radius: 8px; padding: 20px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .stat-card:hover { transform: translateY(-3px); }
+        .stat-card .stat-icon { font-size: 40px; margin-bottom: 10px; }
+        .stat-card .stat-number { font-size: 32px; font-weight: 700; color: #2c3e50; }
+        .stat-card .stat-label { color: #7f8c8d; font-size: 14px; margin-top: 5px; }
+        .stat-card.online .stat-icon, .stat-card.online .stat-number { color: #27ae60; }
+        .stat-card.offline .stat-icon, .stat-card.offline .stat-number { color: #e74c3c; }
+        .stat-card.unknown .stat-icon, .stat-card.unknown .stat-number { color: #f39c12; }
+        .stat-card.tasks .stat-icon, .stat-card.tasks .stat-number { color: #3498db; }
+
+        .search-bar { margin-bottom: 20px; }
+        .action-bar { margin-bottom: 20px; display: flex; justify-content: space-between; align-items: center; }
+
+        .status-tag { padding: 4px 12px; border-radius: 12px; font-size: 12px; display: inline-block; }
+        .status-tag.online { background: #d4edda; color: #27ae60; }
+        .status-tag.offline { background: #f8d7da; color: #e74c3c; }
+        .status-tag.unknown { background: #fff3cd; color: #f39c12; }
+        .status-tag.running { background: #cce5ff; color: #007bff; }
+        .status-tag.success { background: #d4edda; color: #27ae60; }
+        .status-tag.failed { background: #f8d7da; color: #e74c3c; }
+        .status-tag.waiting { background: #fff3cd; color: #f39c12; }
+
+        .command-editor { font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; }
+
+        .log-viewer { background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: 'Consolas', 'Monaco', monospace; font-size: 13px; white-space: pre-wrap; max-height: 500px; overflow-y: auto; line-height: 1.6; }
+        .log-viewer .log-time { color: #888; }
+        .log-viewer .log-info { color: #569cd6; }
+        .log-viewer .log-success { color: #6a9955; }
+        .log-viewer .log-error { color: #f44747; }
+        .log-viewer .log-warning { color: #dcdcaa; }
+
+        .el-table { font-size: 13px; }
+        .el-table th { background: #f8f9fa !important; color: #2c3e50 !important; font-weight: 600; }
+
+        .detail-row { display: flex; margin-bottom: 12px; align-items: flex-start; }
+        .detail-row .label { width: 120px; color: #7f8c8d; font-size: 13px; flex-shrink: 0; }
+        .detail-row .value { flex: 1; color: #2c3e50; font-size: 13px; }
+
+        .brand-card { cursor: pointer; border: 2px solid transparent; transition: all 0.2s; }
+        .brand-card.active { border-color: #3498db; background: #e8f4fd; }
+        .brand-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    </style>
+</head>
+<body>
+<div id="app">
+    <div class="layout">
+        <!-- 顶部标题栏 -->
+        <div class="header">
+            <div class="header-title">
+                <el-icon><Server /></el-icon>
+                网络设备配置备份系统
+            </div>
+            <div class="header-info">
+                <el-icon><Monitor /></el-icon>
+                <span style="margin-left:6px;">Web管理控制台</span>
+            </div>
+        </div>
+
+        <!-- 主体部分 -->
+        <div class="main-container">
+            <!-- 侧边栏 -->
+            <div class="sidebar">
+                <el-menu
+                        class="sidebar-menu"
+                        :default-active="activeMenu"
+                        @select="handleMenuSelect">
+                    <el-menu-item index="dashboard">
+                        <el-icon><DataAnalysis /></el-icon>
+                        <span>仪表盘</span>
+                    </el-menu-item>
+                    <el-menu-item index="devices">
+                        <el-icon><Monitor /></el-icon>
+                        <span>设备资产列表</span>
+                    </el-menu-item>
+                    <el-menu-item index="brands">
+                        <el-icon><Tools /></el-icon>
+                        <span>品牌命令配置</span>
+                    </el-menu-item>
+                    <el-menu-item index="tasks">
+                        <el-icon><Tickets /></el-icon>
+                        <span>任务日志</span>
+                    </el-menu-item>
+                </el-menu>
+            </div>
+
+            <!-- 内容区域 -->
+            <div class="content">
+                <!-- ========== 仪表盘 ========== -->
+                <div v-if="activeMenu === 'dashboard'">
+                    <div class="page-card">
+                        <div class="page-title">概览统计</div>
+                        <el-row :gutter="20">
+                            <el-col :span="6">
+                                <div class="stat-card">
+                                    <el-icon class="stat-icon"><Monitor /></el-icon>
+                                    <div class="stat-number">{{ stats.totalDevices }}</div>
+                                    <div class="stat-label">设备总数</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card online">
+                                    <el-icon class="stat-icon"><CircleCheck /></el-icon>
+                                    <div class="stat-number">{{ stats.onlineDevices }}</div>
+                                    <div class="stat-label">在线设备</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card offline">
+                                    <el-icon class="stat-icon"><CircleClose /></el-icon>
+                                    <div class="stat-number">{{ stats.offlineDevices }}</div>
+                                    <div class="stat-label">离线设备</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="6">
+                                <div class="stat-card tasks">
+                                    <el-icon class="stat-icon"><DataLine /></el-icon>
+                                    <div class="stat-number">{{ stats.totalTasks }}</div>
+                                    <div class="stat-label">备份任务总数</div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+
+                    <div class="page-card">
+                        <div class="page-title">各品牌设备分布</div>
+                        <el-row :gutter="20">
+                            <el-col :span="8" v-for="(count, brand) in stats.brandDistribution" :key="brand">
+                                <div style="background:#fff;border:1px solid #e6e8eb;border-radius:8px;padding:20px;margin-bottom:15px;">
+                                    <div style="font-size:14px;color:#7f8c8d;">{{ brand }}</div>
+                                    <div style="font-size:28px;font-weight:700;color:#3498db;margin-top:5px;">{{ count }} 台</div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+
+                    <div class="page-card">
+                        <div class="page-title">任务执行情况</div>
+                        <el-row :gutter="20">
+                            <el-col :span="8">
+                                <div style="background:#fff;border:1px solid #e6e8eb;border-radius:8px;padding:20px;">
+                                    <div style="font-size:14px;color:#7f8c8d;">成功任务</div>
+                                    <div style="font-size:28px;font-weight:700;color:#27ae60;margin-top:5px;">{{ stats.successTasks }}</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="8">
+                                <div style="background:#fff;border:1px solid #e6e8eb;border-radius:8px;padding:20px;">
+                                    <div style="font-size:14px;color:#7f8c8d;">失败任务</div>
+                                    <div style="font-size:28px;font-weight:700;color:#e74c3c;margin-top:5px;">{{ stats.failedTasks }}</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="8">
+                                <div style="background:#fff;border:1px solid #e6e8eb;border-radius:8px;padding:20px;">
+                                    <div style="font-size:14px;color:#7f8c8d;">执行中</div>
+                                    <div style="font-size:28px;font-weight:700;color:#3498db;margin-top:5px;">{{ stats.runningTasks }}</div>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+
+                    <div class="page-card">
+                        <div class="page-title">快捷操作</div>
+                        <div style="display:flex;gap:15px;flex-wrap:wrap;">
+                            <el-button type="primary" size="large" @click="activeMenu='devices'">
+                                <el-icon><Plus /></el-icon>&nbsp;管理设备
+                            </el-button>
+                            <el-button type="success" size="large" @click="activeMenu='tasks'">
+                                <el-icon><Tickets /></el-icon>&nbsp;查看任务日志
+                            </el-button>
+                            <el-button size="large" @click="loadDashboard">
+                                <el-icon><Refresh /></el-icon>&nbsp;刷新数据
+                            </el-button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== 设备管理 ========== -->
+                <div v-if="activeMenu === 'devices'">
+                    <div class="page-card">
+                        <div class="page-title">设备资产列表</div>
+
+                        <div class="action-bar">
+                            <div>
+                                <el-button type="primary" @click="openDeviceDialog()">
+                                    <el-icon><Plus /></el-icon>&nbsp;添加设备
+                                </el-button>
+                                <el-button type="success" :disabled="selectedDevices.length===0" @click="runBackup">
+                                    <el-icon><VideoPlay /></el-icon>&nbsp;备份选中 ({{ selectedDevices.length }})
+                                </el-button>
+                                <el-button type="danger" :disabled="selectedDevices.length===0" @click="deleteDevices">
+                                    <el-icon><Delete /></el-icon>&nbsp;批量删除
+                                </el-button>
+                                <el-button @click="loadDevices">
+                                    <el-icon><Refresh /></el-icon>&nbsp;刷新
+                                </el-button>
+                            </div>
+                            <div>
+                                <el-input
+                                        v-model="searchKeyword"
+                                        placeholder="搜索 IP / 型号"
+                                        style="width:200px;margin-right:10px;"
+                                        clearable
+                                        @input="loadDevices">
+                                    <template #prefix><el-icon><Search /></el-icon></template>
+                                </el-input>
+                            </div>
+                        </div>
+
+                        <el-table
+                                :data="devices"
+                                border
+                                stripe
+                                @selection-change="handleDeviceSelection"
+                                style="width:100%;">
+                            <el-table-column type="selection" width="55" align="center" />
+                            <el-table-column prop="id" label="ID" width="80" align="center" />
+                            <el-table-column prop="brand" label="品牌" width="100" />
+                            <el-table-column prop="model" label="型号" width="150" />
+                            <el-table-column prop="ipAddress" label="IP地址" width="160" />
+                            <el-table-column prop="port" label="端口" width="80" align="center" />
+                            <el-table-column prop="username" label="用户名" width="100" />
+                            <el-table-column label="状态" width="100" align="center">
+                                <template #default="scope">
+                                    <span class="status-tag" :class="getStatusClass(scope.row.status)">
+                                        {{ scope.row.status }}
+                                    </span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="lastBackupTime" label="最后备份" width="170">
+                                <template #default="scope">
+                                    {{ scope.row.lastBackupTime || '-' }}
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="220" fixed="right">
+                                <template #default="scope">
+                                    <el-button size="small" type="primary" @click="openDeviceDialog(scope.row)">
+                                        <el-icon><Edit /></el-icon>编辑
+                                    </el-button>
+                                    <el-button size="small" type="success" @click="backupOne(scope.row)">
+                                        <el-icon><VideoPlay /></el-icon>备份
+                                    </el-button>
+                                    <el-button size="small" type="danger" @click="deleteDevice(scope.row)">
+                                        <el-icon><Delete /></el-icon>删除
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <!-- 设备编辑对话框 -->
+                    <el-dialog
+                            v-model="deviceDialogVisible"
+                            :title="editingDevice.id ? '编辑设备' : '添加设备'"
+                            width="520px">
+                        <el-form :model="editingDevice" label-width="100px">
+                            <el-form-item label="品牌">
+                                <el-select v-model="editingDevice.brand" style="width:100%;">
+                                    <el-option v-for="b in brands" :key="b.displayName" :label="b.displayName" :value="b.displayName" />
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item label="型号">
+                                <el-input v-model="editingDevice.model" placeholder="如：S5700-28P-LI-AC" />
+                            </el-form-item>
+                            <el-form-item label="IP地址">
+                                <el-input v-model="editingDevice.ipAddress" placeholder="如：192.168.1.1" />
+                            </el-form-item>
+                            <el-form-item label="SSH端口">
+                                <el-input-number v-model="editingDevice.port" :min="1" :max="65535" />
+                            </el-form-item>
+                            <el-form-item label="用户名">
+                                <el-input v-model="editingDevice.username" placeholder="SSH登录账号" />
+                            </el-form-item>
+                            <el-form-item :label="editingDevice.id ? '新密码' : '密码'">
+                                <el-input v-model="editingDevice.password" type="password" show-password
+                                          :placeholder="editingDevice.id ? '留空则保持原密码' : 'SSH登录密码'" />
+                            </el-form-item>
+                            <el-form-item label="状态" v-if="editingDevice.id">
+                                <el-select v-model="editingDevice.status" style="width:100%;">
+                                    <el-option label="在线" value="在线" />
+                                    <el-option label="离线" value="离线" />
+                                    <el-option label="未知" value="未知" />
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item label="备注">
+                                <el-input v-model="editingDevice.remark" type="textarea" :rows="2" placeholder="备注信息" />
+                            </el-form-item>
+                        </el-form>
+                        <template #footer>
+                            <el-button @click="deviceDialogVisible=false">取消</el-button>
+                            <el-button type="primary" @click="saveDevice">保存</el-button>
+                        </template>
+                    </el-dialog>
+                </div>
+
+                <!-- ========== 品牌命令配置 ========== -->
+                <div v-if="activeMenu === 'brands'">
+                    <div class="page-card">
+                        <div class="page-title">品牌命令配置</div>
+                        <el-row :gutter="20">
+                            <el-col :span="6">
+                                <div style="font-size:14px;color:#7f8c8d;margin-bottom:15px;">选择品牌</div>
+                                <div
+                                        v-for="brand in brands"
+                                        :key="brand.id"
+                                        class="brand-card"
+                                        :class="{ active: selectedBrand && selectedBrand.id === brand.id }"
+                                        @click="selectBrand(brand)"
+                                        style="padding:15px;border-radius:6px;background:#f8f9fa;margin-bottom:10px;">
+                                    <div style="font-size:15px;font-weight:600;color:#2c3e50;">{{ brand.displayName }}</div>
+                                    <div style="font-size:12px;color:#7f8c8d;margin-top:5px;">{{ brand.description }}</div>
+                                </div>
+                            </el-col>
+                            <el-col :span="18">
+                                <div v-if="selectedBrand">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:15px;">
+                                        <div style="font-size:15px;font-weight:600;color:#2c3e50;">
+                                            <el-icon><Tools /></el-icon>
+                                            {{ selectedBrand.displayName }} - 命令模板
+                                        </div>
+                                        <div>
+                                            <el-button @click="loadCommands">
+                                                <el-icon><Refresh /></el-icon>&nbsp;刷新
+                                            </el-button>
+                                            <el-button type="primary" @click="saveCommands">
+                                                <el-icon><Check /></el-icon>&nbsp;保存修改
+                                            </el-button>
+                                        </div>
+                                    </div>
+
+                                    <el-table :data="commands" border stripe>
+                                        <el-table-column prop="id" label="ID" width="80" align="center" />
+                                        <el-table-column prop="commandType" label="命令类型" width="120" />
+                                        <el-table-column prop="command" label="命令内容" min-width="300">
+                                            <template #default="scope">
+                                                <el-input
+                                                        v-model="scope.row.command"
+                                                        class="command-editor"
+                                                        type="textarea"
+                                                        :rows="2" />
+                                            </template>
+                                        </el-table-column>
+                                        <el-table-column prop="description" label="说明" width="200" />
+                                    </el-table>
+
+                                    <el-alert
+                                            v-if="commands.length > 0"
+                                            type="info"
+                                            :closable="false"
+                                            title="提示：命令执行时会按从上到下的顺序执行，请确保命令正确。"
+                                            style="margin-top:20px;">
+                                    </el-alert>
+                                </div>
+                                <div v-else style="text-align:center;padding:60px;color:#7f8c8d;">
+                                    <el-icon style="font-size:60px;"><Pointer /></el-icon>
+                                    <p style="margin-top:20px;font-size:15px;">请从左侧选择一个品牌</p>
+                                </div>
+                            </el-col>
+                        </el-row>
+                    </div>
+                </div>
+
+                <!-- ========== 任务日志 ========== -->
+                <div v-if="activeMenu === 'tasks'">
+                    <div class="page-card">
+                        <div class="page-title">任务列表</div>
+                        <div class="action-bar">
+                            <div>
+                                <el-button @click="loadTasks">
+                                    <el-icon><Refresh /></el-icon>&nbsp;刷新
+                                </el-button>
+                            </div>
+                            <div>
+                                <el-select
+                                        v-model="taskStatusFilter"
+                                        placeholder="按状态筛选"
+                                        clearable
+                                        style="width:140px;margin-right:10px;"
+                                        @change="loadTasks">
+                                    <el-option label="执行中" value="执行中" />
+                                    <el-option label="成功" value="成功" />
+                                    <el-option label="失败" value="失败" />
+                                    <el-option label="等待中" value="等待中" />
+                                </el-select>
+                            </div>
+                        </div>
+
+                        <el-table :data="tasks" border stripe @row-click="viewTaskLog" style="width:100%;">
+                            <el-table-column prop="id" label="任务ID" width="90" align="center" />
+                            <el-table-column prop="deviceIp" label="设备IP" width="140" />
+                            <el-table-column prop="deviceBrand" label="品牌" width="100" />
+                            <el-table-column label="状态" width="100" align="center">
+                                <template #default="scope">
+                                    <span class="status-tag" :class="getTaskStatusClass(scope.row.status)">
+                                        {{ scope.row.status }}
+                                    </span>
+                                </template>
+                            </el-table-column>
+                            <el-table-column prop="startTime" label="开始时间" width="180" />
+                            <el-table-column prop="endTime" label="结束时间" width="180" />
+                            <el-table-column label="耗时" width="100" align="center">
+                                <template #default="scope">
+                                    {{ formatDuration(scope.row) }}
+                                </template>
+                            </el-table-column>
+                            <el-table-column label="操作" width="150" align="center">
+                                <template #default="scope">
+                                    <el-button size="small" type="primary" @click="viewTaskLog(scope.row)">
+                                        <el-icon><View /></el-icon>查看日志
+                                    </el-button>
+                                </template>
+                            </el-table-column>
+                        </el-table>
+                    </div>
+
+                    <!-- 任务日志详情对话框 -->
+                    <el-dialog v-model="taskDetailVisible" title="任务执行详情" width="900px">
+                        <div v-if="selectedTask">
+                            <div style="display:flex;justify-content:space-between;margin-bottom:20px;padding:15px;background:#f8f9fa;border-radius:6px;">
+                                <div><span style="color:#7f8c8d;">设备IP：</span><span style="font-weight:600;">{{ selectedTask.deviceIp }}</span></div>
+                                <div><span style="color:#7f8c8d;">品牌：</span><span style="font-weight:600;">{{ selectedTask.deviceBrand }}</span></div>
+                                <div><span style="color:#7f8c8d;">状态：</span>
+                                    <span class="status-tag" :class="getTaskStatusClass(selectedTask.status)">{{ selectedTask.status }}</span>
+                                </div>
+                            </div>
+
+                            <el-tabs v-model="activeTab">
+                                <el-tab-pane label="命令输出" name="output">
+                                    <div class="log-viewer" v-if="selectedTask.output">
+{{ selectedTask.output }}
+                                    </div>
+                                    <div v-else style="padding:20px;color:#7f8c8d;text-align:center;">(无输出数据)</div>
+                                </el-tab-pane>
+                                <el-tab-pane label="错误信息" name="error">
+                                    <div class="log-viewer" v-if="selectedTask.errorInfo">
+<span class="log-error">{{ selectedTask.errorInfo }}</span>
+                                    </div>
+                                    <div v-else style="padding:20px;color:#7f8c8d;text-align:center;">(无错误信息)</div>
+                                </el-tab-pane>
+                                <el-tab-pane label="日志记录" name="logs">
+                                    <div class="log-viewer" v-if="taskLogs.length > 0">
+<div v-for="(log, idx) in taskLogs" :key="idx">
+<span class="log-time">[{{ formatTime(log.createTime) }}]</span>
+<span :class="'log-' + (log.level === 'SUCCESS' ? 'success' : log.level === 'ERROR' ? 'error' : log.level === 'WARNING' ? 'warning' : 'info')">[{{ log.level }}]</span>
+{{ log.message }}
+</div>
+                                    </div>
+                                    <div v-else style="padding:20px;color:#7f8c8d;text-align:center;">(无日志记录)</div>
+                                </el-tab-pane>
+                            </el-tabs>
+                        </div>
+                        <template #footer>
+                            <el-button @click="taskDetailVisible=false">关闭</el-button>
+                        </template>
+                    </el-dialog>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vue 3 -->
+<script src="https://unpkg.com/vue@3.4.15/dist/vue.global.js"></script>
+<!-- Element Plus JS -->
+<script src="https://unpkg.com/element-plus@2.4.4/dist/index.full.js"></script>
+<!-- Element Plus Icons -->
+<script src="https://unpkg.com/@element-plus/icons-vue@2.3.1/dist/index.iife.min.js"></script>
+
+<script>
+    const { createApp, ref, reactive, onMounted, computed, nextTick } = Vue;
+
+    const app = createApp({
+        setup() {
+            // ===== 导航 =====
+            const activeMenu = ref('dashboard');
+            const handleMenuSelect = (key) => {
+                activeMenu.value = key;
+                if (key === 'dashboard') loadDashboard();
+                if (key === 'devices') loadDevices();
+                if (key === 'brands') loadBrands();
+                if (key === 'tasks') loadTasks();
+            };
+
+            // ===== 仪表盘 =====
+            const stats = reactive({
+                totalDevices: 0, onlineDevices: 0, offlineDevices: 0, unknownDevices: 0,
+                totalTasks: 0, successTasks: 0, failedTasks: 0, runningTasks: 0,
+                brandDistribution: {}
+            });
+            const loadDashboard = async () => {
+                try {
+                    const res = await fetch('/api/dashboard/stats');
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        Object.assign(stats, data.data);
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            // ===== 设备管理 =====
+            const devices = ref([]);
+            const selectedDevices = ref([]);
+            const searchKeyword = ref('');
+            const deviceDialogVisible = ref(false);
+            const brands = ref([]);
+            const editingDevice = reactive({
+                id: null, brand: '华为', model: '', ipAddress: '', port: 22,
+                username: '', password: '', remark: '', status: '未知'
+            });
+
+            const loadDevices = async () => {
+                try {
+                    const url = searchKeyword.value
+                        ? `/api/devices?keyword=${encodeURIComponent(searchKeyword.value)}`
+                        : '/api/devices';
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        devices.value = data.data;
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            const loadBrands = async () => {
+                try {
+                    const res = await fetch('/api/brands');
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        brands.value = data.data;
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            const handleDeviceSelection = (sel) => { selectedDevices.value = sel; };
+            const getStatusClass = (status) => {
+                if (status === '在线') return 'online';
+                if (status === '离线') return 'offline';
+                return 'unknown';
+            };
+
+            const openDeviceDialog = (device) => {
+                if (device) {
+                    Object.assign(editingDevice, device);
+                    editingDevice.password = ''; // 不回显密码
+                } else {
+                    Object.assign(editingDevice, {
+                        id: null, brand: '华为', model: '', ipAddress: '', port: 22,
+                        username: '', password: '', remark: '', status: '未知'
+                    });
+                }
+                deviceDialogVisible.value = true;
+            };
+
+            const saveDevice = async () => {
+                if (!editingDevice.ipAddress || !editingDevice.ipAddress.trim()) {
+                    ElementPlus.ElMessage.error('IP地址不能为空');
+                    return;
+                }
+                try {
+                    const url = editingDevice.id ? `/api/devices/${editingDevice.id}` : '/api/devices';
+                    const method = editingDevice.id ? 'PUT' : 'POST';
+                    const res = await fetch(url, {
+                        method,
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(editingDevice)
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        ElementPlus.ElMessage.success(data.message || '保存成功');
+                        deviceDialogVisible.value = false;
+                        loadDevices();
+                        loadDashboard();
+                    } else {
+                        ElementPlus.ElMessage.error(data.message || '保存失败');
+                    }
+                } catch (e) {
+                    ElementPlus.ElMessage.error('网络错误');
+                }
+            };
+
+            const deleteDevice = (device) => {
+                ElementPlus.ElMessageBox.confirm(
+                    `确定要删除设备 ${device.ipAddress} 吗？`,
+                    '确认删除',
+                    { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+                ).then(async () => {
+                    const res = await fetch(`/api/devices/${device.id}`, { method: 'DELETE' });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        ElementPlus.ElMessage.success('删除成功');
+                        loadDevices();
+                        loadDashboard();
+                    } else {
+                        ElementPlus.ElMessage.error(data.message);
+                    }
+                }).catch(() => {});
+            };
+
+            const deleteDevices = async () => {
+                if (selectedDevices.value.length === 0) return;
+                ElementPlus.ElMessageBox.confirm(
+                    `确定要删除选中的 ${selectedDevices.value.length} 台设备吗？`,
+                    '确认删除',
+                    { confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning' }
+                ).then(async () => {
+                    const ids = selectedDevices.value.map(d => d.id);
+                    const res = await fetch('/api/devices/batch', {
+                        method: 'DELETE',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(ids)
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        ElementPlus.ElMessage.success(data.message);
+                        loadDevices();
+                        loadDashboard();
+                    }
+                }).catch(() => {});
+            };
+
+            const backupOne = (device) => {
+                ElementPlus.ElMessageBox.confirm(
+                    `确定备份设备 ${device.ipAddress}？`,
+                    '确认备份',
+                    { confirmButtonText: '开始备份', cancelButtonText: '取消', type: 'info' }
+                ).then(async () => {
+                    const res = await fetch('/api/backup/execute', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deviceIds: [device.id] })
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        ElementPlus.ElMessage.success(data.message || '任务已提交');
+                    } else {
+                        ElementPlus.ElMessage.error(data.message || '执行失败');
+                    }
+                }).catch(() => {});
+            };
+
+            const runBackup = async () => {
+                if (selectedDevices.value.length === 0) return;
+                ElementPlus.ElMessageBox.confirm(
+                    `确定备份选中的 ${selectedDevices.value.length} 台设备？`,
+                    '确认备份',
+                    { confirmButtonText: '开始备份', cancelButtonText: '取消', type: 'info' }
+                ).then(async () => {
+                    const ids = selectedDevices.value.map(d => d.id);
+                    const res = await fetch('/api/backup/execute', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ deviceIds: ids })
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        ElementPlus.ElMessage.success(data.message || '任务已提交');
+                    } else {
+                        ElementPlus.ElMessage.error(data.message);
+                    }
+                }).catch(() => {});
+            };
+
+            // ===== 品牌命令配置 =====
+            const selectedBrand = ref(null);
+            const commands = ref([]);
+
+            const selectBrand = (brand) => {
+                selectedBrand.value = brand;
+                loadCommands();
+            };
+
+            const loadCommands = async () => {
+                if (!selectedBrand.value) return;
+                try {
+                    const res = await fetch(`/api/brands/${selectedBrand.value.id}/commands`);
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        commands.value = data.data;
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            const saveCommands = async () => {
+                try {
+                    const res = await fetch('/api/brands/commands/batch-update', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(commands.value)
+                    });
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        ElementPlus.ElMessage.success(data.message || '保存成功');
+                        loadCommands();
+                    } else {
+                        ElementPlus.ElMessage.error(data.message);
+                    }
+                } catch (e) {
+                    ElementPlus.ElMessage.error('网络错误');
+                }
+            };
+
+            // ===== 任务日志 =====
+            const tasks = ref([]);
+            const taskStatusFilter = ref('');
+            const selectedTask = ref(null);
+            const taskDetailVisible = ref(false);
+            const activeTab = ref('output');
+            const taskLogs = ref([]);
+
+            const loadTasks = async () => {
+                try {
+                    let url = '/api/tasks';
+                    if (taskStatusFilter.value) {
+                        url += `?status=${encodeURIComponent(taskStatusFilter.value)}`;
+                    }
+                    const res = await fetch(url);
+                    const data = await res.json();
+                    if (data.code === 200) {
+                        tasks.value = data.data;
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            const getTaskStatusClass = (status) => {
+                if (status === '成功') return 'success';
+                if (status === '失败') return 'failed';
+                if (status === '执行中') return 'running';
+                return 'waiting';
+            };
+
+            const formatDuration = (task) => {
+                try {
+                    const start = new Date(task.startTime).getTime();
+                    if (!task.endTime) return '-';
+                    const end = new Date(task.endTime).getTime();
+                    const seconds = Math.floor((end - start) / 1000);
+                    if (seconds < 60) return `${seconds}秒`;
+                    const mins = Math.floor(seconds / 60);
+                    const secs = seconds % 60;
+                    return `${mins}分${secs}秒`;
+                } catch (e) { return '-'; }
+            };
+
+            const formatTime = (t) => {
+                if (!t) return '';
+                try {
+                    const d = new Date(t);
+                    const h = String(d.getHours()).padStart(2, '0');
+                    const m = String(d.getMinutes()).padStart(2, '0');
+                    const s = String(d.getSeconds()).padStart(2, '0');
+                    return `${h}:${m}:${s}`;
+                } catch (e) { return t; }
+            };
+
+            const viewTaskLog = async (task) => {
+                selectedTask.value = task;
+                taskDetailVisible.value = true;
+                try {
+                    const res = await fetch(`/api/tasks/${task.id}/logs`);
+                    const data = await res.json();
+                    if (data.code === 200 && data.data) {
+                        taskLogs.value = data.data.logs || [];
+                    }
+                } catch (e) { console.error(e); }
+            };
+
+            // 初始化
+            onMounted(() => {
+                loadDashboard();
+                loadBrands();
+            });
+
+            return {
+                // 导航
+                activeMenu, handleMenuSelect,
+                // 仪表盘
+                stats, loadDashboard,
+                // 设备
+                devices, selectedDevices, searchKeyword, loadDevices, handleDeviceSelection,
+                getStatusClass, deviceDialogVisible, editingDevice, openDeviceDialog, saveDevice,
+                deleteDevice, deleteDevices, backupOne, runBackup, brands,
+                // 品牌
+                selectedBrand, selectBrand, commands, loadCommands, saveCommands,
+                // 任务
+                tasks, taskStatusFilter, loadTasks, getTaskStatusClass, formatDuration,
+                selectedTask, taskDetailVisible, activeTab, taskLogs, viewTaskLog, formatTime
+            };
+        }
+    });
+
+    // 注册 Element Plus
+    app.use(ElementPlus);
+    // 注册图标
+    for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+        app.component(key, component);
+    }
+    app.mount('#app');
+</script>
+</body>
+</html>
